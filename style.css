@@ -1,54 +1,56 @@
 :root {
     --primary: #00f2ff;
-    --accent: #ff00ea;
-    --bg: #050505;
+    --secondary: #ff00ea;
+    --bg: #000000;
 }
 
-body,
-html {
+body {
     margin: 0;
-    padding: 0;
-    width: 100%;
-    height: 100%;
+    overflow: hidden;
     background: var(--bg);
     color: white;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    overflow: hidden;
-    cursor: none;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-/* Vibration Button UI */
+canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    pointer-events: none;
+}
+
 #button-container {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 300px;
-    height: 300px;
-    z-index: 50;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    z-index: 10;
 }
 
 #vibe-button {
-    width: 200px;
-    height: 200px;
+    width: 250px;
+    height: 250px;
     border-radius: 50%;
-    background: rgba(0, 242, 255, 0.1);
+    background: rgba(0, 242, 255, 0.05);
     border: 4px solid var(--primary);
-    box-shadow: 0 0 30px var(--primary), inset 0 0 20px var(--primary);
-    cursor: pointer;
-    transition: all 0.2s ease;
+    box-shadow: 0 0 40px var(--primary), inset 0 0 20px var(--primary);
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 1.5rem;
+    font-size: 1.8rem;
     font-weight: bold;
     letter-spacing: 2px;
     text-shadow: 0 0 10px white;
     position: relative;
     overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+#vibe-button.active {
+    transform: scale(0.95);
+    box-shadow: 0 0 80px var(--primary), inset 0 0 40px var(--primary);
+    border-color: white;
 }
 
 #vibe-video {
@@ -58,160 +60,17 @@ html {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: 50%;
     display: none;
-    /* Hidden by default */
     mix-blend-mode: screen;
 }
 
-#vibe-button.active {
-    transform: scale(0.95);
-    box-shadow: 0 0 50px var(--accent), inset 0 0 30px var(--accent);
-    border-color: var(--accent);
-}
-
-#vibe-button.active #vibe-video {
-    display: block;
-}
-
-/* Hide legacy elements */
-#fact-box {
-    display: none;
-}
-
-#canvas {
+#status-bar {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: block;
-    z-index: 10;
-    pointer-events: none;
-    mix-blend-mode: screen;
-}
-
-#status {
-    position: absolute;
-    top: 20px;
+    bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
-    padding: 10px 20px;
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-    border-radius: 20px;
+    opacity: 0.3;
     font-size: 0.8rem;
-    letter-spacing: 2px;
-    opacity: 0.5;
-    z-index: 100;
-}
-
-#calibration-guide {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: none;
-    z-index: 1000;
-}
-
-.corner {
-    position: absolute;
-    width: 40px;
-    height: 40px;
-    border: 3px solid var(--primary);
-    border-radius: 50%;
-    transform: translate(-50%, -50%);
-    box-shadow: 0 0 20px var(--primary);
-    animation: pulse 1.5s infinite;
-}
-
-#tl {
-    top: 5%;
-    left: 5%;
-}
-
-#tr {
-    top: 5%;
-    left: 95%;
-}
-
-#br {
-    top: 95%;
-    left: 95%;
-}
-
-#bl {
-    top: 95%;
-    left: 5%;
-}
-
-#instruction {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 2rem;
-    font-weight: 800;
-    text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
-    text-align: center;
-}
-
-#setup-panel {
-    position: absolute;
-    bottom: 40px;
-    right: 40px;
-    background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(20px);
-    padding: 20px;
-    border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    transition: 0.3s;
-    opacity: 0.1;
-    z-index: 100;
-}
-
-#setup-panel:hover {
-    opacity: 1;
-    transform: translateY(-5px);
-}
-
-#setup-panel h1 {
-    margin: 0;
-    font-size: 1.2rem;
-    letter-spacing: 4px;
-    background: linear-gradient(90deg, var(--primary), var(--accent));
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-#calib-btn {
-    background: var(--primary);
-    border: none;
-    color: black;
-    padding: 8px 16px;
-    border-radius: 10px;
-    font-weight: bold;
-    cursor: pointer;
-    font-size: 0.7rem;
-    margin-top: 10px;
-}
-
-@keyframes pulse {
-    0% {
-        transform: translate(-50%, -50%) scale(0.8);
-        opacity: 0.5;
-    }
-
-    50% {
-        transform: translate(-50%, -50%) scale(1.2);
-        opacity: 1;
-    }
-
-    100% {
-        transform: translate(-50%, -50%) scale(0.8);
-        opacity: 0.5;
-    }
+    letter-spacing: 3px;
+    z-index: 5;
 }
