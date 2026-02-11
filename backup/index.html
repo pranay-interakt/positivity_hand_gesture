@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gesture Recognition - Middle Finger & Prayer Hands</title>
+    <meta name="description" content="Real-time hand gesture recognition using MediaPipe - Show middle finger to reveal image, prayer hands to hide it">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1 class="title">
+                <span class="gradient-text">Gesture Recognition</span>
+            </h1>
+            <p class="subtitle">Show middle finger 🖕 to reveal • Prayer hands 🙏 to hide</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Video Feed Section -->
+            <div class="video-section">
+                <div class="video-container">
+                    <video id="webcam" autoplay playsinline></video>
+                    <canvas id="canvas"></canvas>
+                    <div class="video-overlay">
+                        <div id="status" class="status-badge">Initializing...</div>
+                    </div>
+                </div>
+                
+                <!-- Gesture Info -->
+                <div class="gesture-info">
+                    <div class="info-card">
+                        <div class="info-icon">🖕</div>
+                        <div class="info-text">
+                            <h3>Middle Finger</h3>
+                            <p>Show to reveal image</p>
+                        </div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-icon">🙏</div>
+                        <div class="info-text">
+                            <h3>Prayer Hands</h3>
+                            <p>Show to hide image</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Image Display Section -->
+            <div class="image-section">
+                <div id="imageContainer" class="image-container hidden">
+                    <div class="image-wrapper">
+                        <img id="displayImage" src="photo/6065510171_bb00e7222b_z.jpg" alt="Revealed Image">
+                        <div class="image-glow"></div>
+                    </div>
+                </div>
+                <div id="placeholder" class="placeholder">
+                    <div class="placeholder-content">
+                        <div class="placeholder-icon">👁️</div>
+                        <p>Image hidden</p>
+                        <p class="placeholder-hint">Show middle finger to reveal</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Debug Info -->
+        <div class="debug-panel">
+            <div class="debug-item">
+                <span class="debug-label">Current Gesture:</span>
+                <span id="currentGesture" class="debug-value">None</span>
+            </div>
+            <div class="debug-item">
+                <span class="debug-label">Confidence:</span>
+                <span id="confidence" class="debug-value">0%</span>
+            </div>
+            <div class="debug-item">
+                <span class="debug-label">FPS:</span>
+                <span id="fps" class="debug-value">0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MediaPipe Hands -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    
+    <!-- Main Application Script -->
+    <script src="app.js"></script>
+</body>
+</html>

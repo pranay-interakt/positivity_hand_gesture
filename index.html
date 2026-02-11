@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Wall Projection</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+
+<body>
+    <div id="schematic-ui">
+        <div id="button-container">
+            <div id="vibe-button">
+                PUSH ME
+                <video id="vibe-video" src="/Target_Circle_15.mp4" loop playsinline muted></video>
+            </div>
+        </div>
+    </div>
+
+    <div id="fact-box">
+        <h2 id="fact-title">Fact</h2>
+        <p id="fact-text">Tap to discover secrets...</p>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div id="overlay">
+        <div id="status">Waiting for Hand...</div>
+        <div id="calibration-guide">
+            <div class="corner" id="tl"></div>
+            <div class="corner" id="tr"></div>
+            <div class="corner" id="br"></div>
+            <div class="corner" id="bl"></div>
+            <div id="instruction">Point to the calibration dots</div>
+        </div>
+    </div>
+
+    <div id="setup-panel">
+        <h1>VIBE PROJECTION</h1>
+        <p>Interactive Wall Experience</p>
+        <button id="calib-btn">RE-CALIBRATE</button>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
