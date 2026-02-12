@@ -10,18 +10,20 @@
 </head>
 
 <body>
-    <div id="button-container">
-        <div id="vibe-button">
-            PUSH ME
-            <video id="vibe-video" src="/Target_Circle_15.mp4" loop playsinline muted></video>
-        </div>
+    <div id="interaction-primer">
+        <h1>CLICK TO ENTER IMMERSIVE MODE</h1>
     </div>
+
+    <!-- The Idle Target (The "Tap") -->
+    <div id="target-zone">
+        <div class="pulse-ring"></div>
+        <div class="core-dot"></div>
+    </div>
+
+    <!-- The Video Overlay (Hidden until triggered) -->
+    <video id="vibe-video" src="photo/Akthealth- Event Banner.mp4" playsinline muted></video>
 
     <canvas id="canvas"></canvas>
-
-    <div id="status-bar">
-        AUTO-SCANNING ACTIVE
-    </div>
 
     <script src="app.js"></script>
 </body>

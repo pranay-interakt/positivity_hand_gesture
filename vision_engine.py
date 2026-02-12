@@ -29,13 +29,9 @@ class VisionEngine:
         
         self.target_center = None
         self.auto_locked = False
-        self.last_scan_time = 0
         self.last_click_time = 0
+        self.debug_mode = False
         
-        # Cyan color range for button detection
-        self.lower_cyan = np.array([85, 100, 100])
-        self.upper_cyan = np.array([105, 255, 255])
-
         # Load existing lock if any
         self.load_lock()
 
@@ -43,98 +39,139 @@ class VisionEngine:
         if os.path.exists('center_lock.npy'):
             try:
                 self.target_center = tuple(np.load('center_lock.npy').tolist())
-                print(f"🔒 Target Lock Loaded: {self.target_center}")
+                print(f"🔒 Stored Target Loaded: {self.target_center}")
             except:
                 pass
 
-    def find_button(self, frame):
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        mask = cv2.inRange(hsv, self.lower_cyan, self.upper_cyan)
-        mask = cv2.erode(mask, None, iterations=2)
-        mask = cv2.dilate(mask, None, iterations=2)
+    def find_button_auto(self, frame):
+        """Finds the brightest circular spot (the projection)."""
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gray = cv2.GaussianBlur(gray, (21, 21), 0)
         
-        contours, _ = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # Look for VERY bright spots (projector hotspots)
+        _, thresh = cv2.threshold(gray, 230, 255, cv2.THRESH_BINARY)
+        
+        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if contours:
             c = max(contours, key=cv2.contourArea)
-            ((x, y), radius) = cv2.minEnclosingCircle(c)
-            if 20 < radius < 300:
-                return (int(x), int(y)), int(radius)
-        return None, None
+            M = cv2.moments(c)
+            if M["m00"] > 0:
+                cX = int(M["m10"] / M["m00"])
+                cY = int(M["m01"] / M["m00"])
+                return (cX, cY)
+        return None
+
+    def set_target_mouse(self, event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            self.target_center = (x, y)
+            self.auto_locked = False
+            np.save('center_lock.npy', np.array(self.target_center))
+            print(f"📍 TARGET MANUALLY SET: ({x}, {y})")
 
     def run(self):
         print("Vision Engine Started. Waiting for connections...")
+        cv2.namedWindow('Vision Tool')
+        cv2.setMouseCallback('Vision Tool', self.set_target_mouse)
+        
         while True:
             ret, frame = self.cap.read()
             if not ret: break
 
             frame = cv2.flip(frame, 1)
             h, w, _ = frame.shape
+            
+            # --- AUTO-SEEK ---
+            if self.target_center is None:
+                auto_pos = self.find_button_auto(frame)
+                if auto_pos:
+                    self.target_center = auto_pos
+                    self.auto_locked = True
+                    print(f"✨ AUTO-SEEK FOUND TARGET: {auto_pos}")
+
+            # --- HAND TRACKING ---
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = self.hands.process(rgb_frame)
 
-            # --- AUTO-SCAN ---
-            if self.target_center is None or (time.time() - self.last_scan_time > 3.0):
-                self.last_scan_time = time.time()
-                center, radius = self.find_button(frame)
-                if center:
-                    self.target_center = center
-                    self.auto_locked = True
-                    print(f"✅ AUTO-DETECTED BUTTON AT {center}")
-
-            # --- HAND TRACKING ---
             if results.multi_hand_landmarks:
                 for hand_landmarks in results.multi_hand_landmarks:
-                    index_tip = hand_landmarks.landmark[8]
-                    cx, cy = int(index_tip.x * w), int(index_tip.y * h)
+                    # Check if all 5 fingers are open
+                    fingers_open = []
                     
-                    # Draw visual markers
-                    mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-                    cv2.circle(frame, (cx, cy), 10, (0, 255, 255), -1)
+                    # Wrist
+                    wrist = hand_landmarks.landmark[0]
+                    
+                    # Helper for distance to wrist
+                    def dist_to_wrist(lm_idx):
+                        lm = hand_landmarks.landmark[lm_idx]
+                        return (lm.x - wrist.x)**2 + (lm.y - wrist.y)**2
 
-                    # --- PROXIMITY TRIGGER ---
-                    if self.target_center:
+                    # Thumb: Tip (4) vs IP (3) - slightly different logic often used but dist check works ok
+                    # Often for thumb, we check if it is away from the hand center, but let's stick to wrist dist
+                    thumbs_up = dist_to_wrist(4) > dist_to_wrist(3) + 0.002 # small buffer
+                    fingers_open.append(thumbs_up)
+
+                    # Other 4 fingers: Tip vs PIP (6, 10, 14, 18)
+                    for tip, pip in [(8, 6), (12, 10), (16, 14), (20, 18)]:
+                         fingers_open.append(dist_to_wrist(tip) > dist_to_wrist(pip))
+
+                    is_five_fingers = all(fingers_open)
+
+                    # Use Middle Finger MCP (9) or Centroid as interaction point for "Whole Hand"
+                    # Landmark 9 is stable
+                    center_lm = hand_landmarks.landmark[9] 
+                    cx, cy = int(center_lm.x * w), int(center_lm.y * h)
+                    
+                    # Visual feedback
+                    color = (0, 255, 255) if is_five_fingers else (0, 0, 255)
+                    cv2.circle(frame, (cx, cy), 20, color, -1)
+                    
+                    if is_five_fingers:
+                        cv2.putText(frame, "HAND OPEN", (cx, cy-40), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+
+                    if self.target_center and is_five_fingers:
                         tx, ty = self.target_center
                         dist = np.sqrt((cx - tx)**2 + (cy - ty)**2)
                         
-                        if dist < 90: # In range
-                            cv2.circle(frame, (int(tx), int(ty)), 90, (0, 255, 0), 5)
-                            cv2.putText(frame, "TRIGGER!", (cx, cy-30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3)
+                        # Large hit zone: 150 pixels for wall interaction
+                        if dist < 150: 
+                            cv2.circle(frame, (tx, ty), 150, (0, 255, 0), 5)
+                            cv2.putText(frame, "HIT!", (cx, cy-70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3)
                             
                             if time.time() - self.last_click_time > 2.0:
-                                print(f"🎯 BUTTON HIT! Dist: {dist:.1f}")
+                                print(f"🎯 TRIGGER (Dist: {dist:.1f})")
                                 sio.emit('click', {'x': 0.5, 'y': 0.5})
                                 self.last_click_time = time.time()
                         else:
                             cv2.putText(frame, f"Dist: {int(dist)}", (cx+20, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+                    elif not is_five_fingers:
+                         cv2.putText(frame, "OPEN HAND NEEDED", (cx, cy-40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
-            # --- UI FEEDBACK ---
+
+            # --- UI HUD ---
             if self.target_center:
                 tx, ty = self.target_center
-                color = (255, 255, 0) if self.auto_locked else (255, 0, 0)
-                cv2.circle(frame, (int(tx), int(ty)), 90, color, 2)
-                cv2.putText(frame, "TARGET", (int(tx)-40, int(ty)-100), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+                color = (255, 200, 0) if self.auto_locked else (255, 0, 0)
+                cv2.circle(frame, (tx, ty), 150, color, 3)
+                cv2.putText(frame, "ACTIVE ZONE", (tx-80, ty-160), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
 
-            cv2.putText(frame, "Auto-Scanning... Press 'L' to Manual Lock", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-            cv2.imshow('Vision Engine', frame)
+            cv2.putText(frame, "1. PROJECT IMAGE ON WALL", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            cv2.putText(frame, "2. CLICK WINDOW TO LOCK SPOT", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            cv2.putText(frame, "3. USE OPEN HAND TO TRIGGER", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+            cv2.imshow('Vision Tool', frame)
 
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'): break
-            elif key == ord('l'): # Manual Lock override
-                # Find current index finger if possible
-                if results.multi_hand_landmarks:
-                    hand_landmarks = results.multi_hand_landmarks[0]
-                    index_tip = hand_landmarks.landmark[8]
-                    self.target_center = (int(index_tip.x * w), int(index_tip.y * h))
-                    self.auto_locked = False
-                    np.save('center_lock.npy', np.array(self.target_center))
-                    print(f"🔒 MANUALLY LOCKED AT {self.target_center}")
+            elif key == ord('l'): 
+                self.target_center = None
+                print("🗑️ Target Reset")
 
         self.cap.release()
         cv2.destroyAllWindows()
 
 @sio.event
 def connect(sid, environ):
-    print("Client connected:", sid)
+    print("🌐 Browser Connected")
 
 if __name__ == "__main__":
     engine = VisionEngine()
