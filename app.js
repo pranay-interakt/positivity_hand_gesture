@@ -35,6 +35,9 @@ document.addEventListener('click', () => {
     }).catch(e => console.error("Video Prime Error:", e));
 }, { once: true });
 
+// --- CURSOR HIDER ---
+document.body.style.cursor = 'none';
+
 // --- CONCENTRIC WAVE EFFECT ---
 class Wave {
     constructor(x, y, delay = 0) {
@@ -42,8 +45,8 @@ class Wave {
         this.radius = 0;
         this.alpha = 1.0;
         this.delay = delay;
-        this.speed = 8;
-        this.maxRadius = Math.max(width, height) * 0.4;
+        this.speed = 5; // Slower, tighter expansion
+        this.maxRadius = Math.min(width, height) * 0.15; // Smaller footprint
     }
     update() {
         if (this.delay > 0) {

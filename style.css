@@ -4,14 +4,16 @@
     --bg: #000000;
 }
 
+* {
+    cursor: none !important;
+}
+
 body {
     margin: 0;
     overflow: hidden;
     background: #000;
     color: white;
     font-family: 'Segoe UI', sans-serif;
-    cursor: none;
-    /* Hide cursor for immersion */
 }
 
 canvas {
