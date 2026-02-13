@@ -14,46 +14,69 @@ resize();
 
 // --- BROWSER PRIVACY BYPASS & FULLSCREEN ---
 const primer = document.getElementById('interaction-primer');
-document.addEventListener('click', () => {
-    primer.style.display = 'none';
-    console.log("🚀 Interaction enabled. Video primed.");
 
-    // Request Fullscreen
+function goFullscreen() {
     if (document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen();
-    } else if (document.documentElement.webkitRequestFullscreen) { /* Safari */
+    } else if (document.documentElement.webkitRequestFullscreen) {
         document.documentElement.webkitRequestFullscreen();
     }
+}
+
+document.addEventListener('click', () => {
+    primer.style.display = 'none';
+    console.log("🚀 Interaction enabled. Fullscreen requested.");
+    goFullscreen();
 
     // Prime the video
     const video = document.getElementById('vibe-video');
     video.play().then(() => {
-        video.pause(); // Just a tiny bit of play to satisfy Chrome
+        video.pause();
     }).catch(e => console.error("Video Prime Error:", e));
 }, { once: true });
 
-// --- RIPPLE EFFECT ---
-class Ripple {
-    constructor(x, y) {
+// --- CONCENTRIC WAVE EFFECT ---
+class Wave {
+    constructor(x, y, delay = 0) {
         this.x = x; this.y = y;
         this.radius = 0;
         this.alpha = 1.0;
+        this.delay = delay;
+        this.speed = 8;
+        this.maxRadius = Math.max(width, height) * 0.4;
     }
     update() {
-        this.radius += 10;
-        this.alpha -= 0.02;
+        if (this.delay > 0) {
+            this.delay--;
+            return;
+        }
+        this.radius += this.speed;
+        this.alpha = 1 - (this.radius / this.maxRadius);
     }
     draw() {
-        if (this.alpha <= 0) return;
+        if (this.delay > 0 || this.alpha <= 0) return;
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(0, 242, 255, ${this.alpha})`;
-        ctx.lineWidth = 4;
+        ctx.strokeStyle = `rgba(0, 242, 255, ${this.alpha * 0.8})`;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Secondary subtle glow
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius + 20, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(0, 242, 255, ${this.alpha * 0.2})`;
+        ctx.lineWidth = 10;
         ctx.stroke();
     }
 }
 
 let ripples = [];
+
+function createWaveImpact(x, y) {
+    for (let i = 0; i < 4; i++) {
+        ripples.push(new Wave(x, y, i * 10));
+    }
+}
 
 function animate() {
     ctx.clearRect(0, 0, width, height);
@@ -68,7 +91,7 @@ animate();
 
 // --- LOGIC ---
 const video = document.getElementById('vibe-video');
-let isVibrating = false;
+let isVideoActive = false;
 
 socket.on('connect', () => {
     console.log("✅ Connected to Vision Engine!");
@@ -76,77 +99,56 @@ socket.on('connect', () => {
 
 socket.on('click', (data) => {
     console.log("🖱️ SIGNAL RECEIVED:", data);
-
-    // Always spawn ripple where touch was detected
-    ripples.push(new Ripple(data.x * width, data.y * height));
-
-    // Backend sends (0.5, 0.5) when hand hits target
-    // We check if it's the "HIT" signal (which is usually centered)
-    if (data.x > 0.4 && data.x < 0.6 && data.y > 0.4 && data.y < 0.6) {
-        if (!isVibrating) {
-            console.log("🎯 HIT TARGET! Triggering Vibe.");
-            triggerVibration();
-        }
-    }
+    handleTap(data.x * width, data.y * height);
 });
 
 // --- KEYBOARD / MOUSE FALLBACK ---
 document.addEventListener('keydown', (e) => {
     if (e.code === 'Space' || e.code === 'Enter') {
-        if (!isVibrating && primer.style.display === 'none') {
-            triggerVibration();
+        if (primer.style.display === 'none') {
+            handleTap(width / 2, height / 2);
         }
     }
 });
 
 document.addEventListener('click', (e) => {
-    // Determine if primer is active. If so, ignore (primer handles its own click)
     if (primer.style.display !== 'none') return;
-
-    // Spawn ripple at click location
-    ripples.push(new Ripple(e.clientX, e.clientY));
-
-    // Check if click is near center (Visual Target Zone)
-    // Update: Allow click ANYWHERE since target is hidden
-    if (!isVibrating) {
-        console.log("🖱️ MOUSE CLICK TRIGGERed Vibe.");
-        triggerVibration();
-    }
+    handleTap(e.clientX, e.clientY);
 });
 
-function triggerVibration() {
-    isVibrating = true;
+function handleTap(x, y) {
+    createWaveImpact(x, y);
 
-    // Add class to body to hide target
+    if (isVideoActive) {
+        stopVideo();
+    } else {
+        startVideo();
+    }
+}
+
+function startVideo() {
+    isVideoActive = true;
     document.body.classList.add('video-active');
-
+    video.style.display = 'block';
     video.classList.add('playing');
     video.currentTime = 0;
     video.muted = false;
-    video.loop = false;
+    video.loop = true; // Loop as requested until re-tap
 
-    video.style.display = 'block'; // Ensure it's visible before playing
-
-    video.play().then(() => {
-        video.classList.add('playing'); // Ensure opacity transition happens
-    }).catch(e => {
+    video.play().catch(e => {
         console.error("Video Play Failed:", e);
-        setTimeout(resetState, 2000);
     });
-
-    video.onended = () => {
-        resetState();
-    };
 }
 
-function resetState() {
-    isVibrating = false;
-    document.body.classList.remove('video-active');
+function stopVideo() {
+    isVideoActive = false;
     video.classList.remove('playing');
+    document.body.classList.remove('video-active');
 
     setTimeout(() => {
         video.pause();
         video.style.display = 'none';
         video.currentTime = 0;
-    }, 500); // Wait for fade out
+    }, 500);
 }
+

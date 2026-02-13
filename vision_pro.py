@@ -59,20 +59,23 @@ def main():
     print("3. Press 'R' to reset calibration.")
     print("4. Press 'Q' to quit.")
     
+    # Intentional Interaction State
+    dwell_counter = 0
+    last_stable_pos = (0, 0)
+    STABILITY_THRESHOLD = 30 # px
+    DWELL_REQUIRED = 5 # frames
+    SIZE_THRESHOLD = 0.12 # relative size (dist 0-9)
     last_click_time = 0
+    COOLDOWN = 1.5 # seconds between toggles
 
     while True:
         ret, frame = cap.read()
         if not ret: break
 
-        # Optional: Flip for mirror effect if projecting from front, but usually rear projection or ceiling mount varies.
-        # Let's keep it raw for now, but usually webcam is mirrored.
-        # frame = cv2.flip(frame, 1) 
-
         display_frame = frame.copy()
 
         if calibrating:
-            # Dynamic PROMPT for Calibration
+            # ... (Calibration UI logic)
             prompts = [
                 "STEP 1: Click TOP-LEFT of Projection",
                 "STEP 2: Click TOP-RIGHT of Projection",
@@ -81,80 +84,94 @@ def main():
             ]
             current_prompt = prompts[len(calibration_points)] if len(calibration_points) < 4 else "CALIBRATING..."
             
-            # Draw persistent instructions background
             cv2.rectangle(display_frame, (0, 0), (640, 80), (0, 0, 0), -1)
             cv2.putText(display_frame, "SETUP: CLICK HERE ON CORNERS", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
             cv2.putText(display_frame, current_prompt, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
-            # Draw calibration points
             for i, ptr in enumerate(calibration_points):
                 cv2.circle(display_frame, ptr, 8, (0, 0, 255), -1)
-                cv2.circle(display_frame, ptr, 4, (255, 255, 255), -1) # white center
+                cv2.circle(display_frame, ptr, 4, (255, 255, 255), -1)
                 if i > 0:
                     cv2.line(display_frame, calibration_points[i-1], ptr, (0, 255, 0), 2)
             
             if len(calibration_points) == 4:
-                # Close loop
                 cv2.line(display_frame, calibration_points[3], calibration_points[0], (0, 255, 0), 2)
-                
-                # Compute Matrix
                 src_pts = np.float32(calibration_points)
                 try:
                     warp_matrix = get_perspective_transform(src_pts)
                     calibrating = False
                     print("✅ Calibration Complete! Switching to Tracking Mode.")
                 except Exception as e:
-                    print(f"❌ Calibration Failed (Points invalid): {e}")
+                    print(f"❌ Calibration Failed: {e}")
                     calibration_points = []
-
         else:
             # --- TRACKING MODE ---
-            
-            # Warp the frame to "Screen View"
             if warp_matrix is not None:
                 warped = cv2.warpPerspective(frame, warp_matrix, (WARP_W, WARP_H))
-                
-                # Convert to RGB for MediaPipe
                 rgb_warped = cv2.cvtColor(warped, cv2.COLOR_BGR2RGB)
                 results = hands.process(rgb_warped)
                 
+                h, w, _ = warped.shape
+                hand_detected = False
+
                 if results.multi_hand_landmarks:
                     for hand_landmarks in results.multi_hand_landmarks:
-                        # Check for 5 Fingers Open
+                        # 1. Check for 5 Fingers Open
                         wrist = hand_landmarks.landmark[0]
+                        mcp = hand_landmarks.landmark[9]
+                        
+                        # Calculate relative size (Distance 0 to 9)
+                        hand_size = math.hypot(wrist.x - mcp.x, wrist.y - mcp.y)
                         
                         fingers_open = []
-                        # 4 Fingers:
                         for tip_idx, pip_idx in [(8,6), (12,10), (16,14), (20,18)]:
                             tip = hand_landmarks.landmark[tip_idx]
                             pip = hand_landmarks.landmark[pip_idx]
-                            # Distance to wrist
-                            d_tip = math.hypot(tip.x - wrist.x, tip.y - wrist.y)
-                            d_pip = math.hypot(pip.x - wrist.x, pip.y - wrist.y)
-                            fingers_open.append(d_tip > d_pip)
+                            fingers_open.append(math.hypot(tip.x - wrist.x, tip.y - wrist.y) > 
+                                              math.hypot(pip.x - wrist.x, pip.y - wrist.y))
                         
                         is_open_hand = all(fingers_open)
+                        cx, cy = int(mcp.x * w), int(mcp.y * h)
                         
-                        # Draw on Warped Frame
-                        h, w, _ = warped.shape
-                        cx, cy = int(hand_landmarks.landmark[9].x * w), int(hand_landmarks.landmark[9].y * h)
-                        
-                        if is_open_hand:
+                        # 2. Touch Detection (Size + Dwell)
+                        if is_open_hand and hand_size > SIZE_THRESHOLD:
+                            hand_detected = True
+                            dist_to_last = math.hypot(cx - last_stable_pos[0], cy - last_stable_pos[1])
+                            
+                            if dist_to_last < STABILITY_THRESHOLD:
+                                dwell_counter += 1
+                                # Visual progress bar for "Pressing"
+                                progress = min(dwell_counter / DWELL_REQUIRED, 1.0)
+                                cv2.circle(warped, (cx, cy), int(20 + 30*progress), (0, 255, 255), 3)
+                            else:
+                                dwell_counter = 0
+                                last_stable_pos = (cx, cy)
+                            
+                            if dwell_counter >= DWELL_REQUIRED:
+                                if time.time() - last_click_time > COOLDOWN:
+                                    screen_x = int((cx / WARP_W) * screen_width)
+                                    screen_y = int((cy / WARP_H) * screen_height)
+                                    print(f"🎯 INTENTIONAL TOUCH! Position: ({screen_x}, {screen_y}) | Size: {hand_size:.2f}")
+                                    pyautogui.click(screen_x, screen_y)
+                                    last_click_time = time.time()
+                                    dwell_counter = 0 # reset after trigger
+                                
                             cv2.circle(warped, (cx, cy), 20, (0, 255, 0), -1)
-                            cv2.putText(warped, "OPEN HAND DETECTED", (cx, cy-30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                            
-                            # MAP TO SCREEN
-                            screen_x = int((cx / WARP_W) * screen_width)
-                            screen_y = int((cy / WARP_H) * screen_height)
-                            
-                            if time.time() - last_click_time > 1.0:
-                                print(f"🖱️ CLICK! ({screen_x}, {screen_y})")
-                                pyautogui.click(screen_x, screen_y)
-                                last_click_time = time.time()
+                            cv2.putText(warped, "NEAR WALL (STAY STEADY)", (cx-50, cy-50), 
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
                         else:
+                            dwell_counter = 0
                             cv2.circle(warped, (cx, cy), 10, (0, 0, 255), -1)
+                            if not is_open_hand:
+                                cv2.putText(warped, "OPEN HAND NEEDED", (cx-50, cy-30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,255), 1)
+                            elif hand_size <= SIZE_THRESHOLD:
+                                cv2.putText(warped, "TOUCH THE WALL", (cx-50, cy-30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,255), 1)
+
+                if not hand_detected:
+                    dwell_counter = 0
 
                 cv2.imshow("Warped View (Screen)", warped)
+
 
 
         if not calibrating:
